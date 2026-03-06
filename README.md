@@ -8,10 +8,57 @@ Use this only with apps you are authorized to test.
 
 - macOS with Xcode command line tools (`xcrun`, `codesign`, `otool`)
 - Python 3
-- `sudo` access (script moves output to `/Applications`)
-- Source IPA at `/path/to/notebooklm.zip` (edit script if different)
+- `sudo` access (scripts can move output to `/Applications`)
 
-## Main flow
+## Main flow (generalized)
+
+Use `test_generalized.sh` when you want parameterized input instead of hardcoded app paths.
+
+Required args:
+
+- `--method` (`-1` or `-2`)
+- `--app` (path to `.app`)
+- `--macho` (path to main Mach-O inside app)
+- `--info-plist` (path to `Info.plist`)
+
+Optional args:
+
+- `--ipa-zip` (extract app from zip first)
+- `--entitlements` (custom entitlements output file)
+- `--skip-install` (skip moving to `/Applications` and opening)
+
+Examples:
+
+```bash
+./test_generalized.sh \
+  --method -1 \
+  --app ./NotebookLM_prod.app \
+  --macho ./NotebookLM_prod.app/NotebookLM_prod \
+  --info-plist ./NotebookLM_prod.app/Info.plist
+```
+
+```bash
+./test_generalized.sh \
+  --method -2 \
+  --ipa-zip /path/to/notebooklm.zip \
+  --app ./NotebookLM_prod.app \
+  --macho ./NotebookLM_prod.app/NotebookLM_prod \
+  --info-plist ./NotebookLM_prod.app/Info.plist
+```
+
+What this flow does:
+
+1. Optionally unzips IPA and extracts the target `.app`
+2. Normalizes plist/signature-related keys (`checkplist_iOSig.py`)
+3. Patches Mach-O `LC_BUILD_VERSION` fields
+4. Re-signs nested frameworks/extensions (inside-out)
+5. Re-signs final app bundle
+6. Optionally moves app to `/Applications`
+7. Optionally clears xattrs and opens the app
+
+## Devs testing flow (legacy/hardcoded)
+
+`test_from_here.sh` is kept as-is for developer-specific testing and automation.
 
 Run:
 
@@ -29,16 +76,6 @@ Mode details:
 
 - `-1`: extract entitlements from the main Mach-O using `entitlement_ipa.py`
 - `-2`: generate `entitlements.plist` from the script template
-
-What the script does:
-
-1. Unzips IPA and extracts the `.app`
-2. Normalizes plist/signature-related keys (`checkplist_iOSig.py`)
-3. Patches Mach-O `LC_BUILD_VERSION` fields
-4. Re-signs nested frameworks/extensions (inside-out)
-5. Re-signs final app bundle
-6. Moves app to `/Applications`
-7. Clears xattrs and opens the app
 
 ## Individual scripts
 
