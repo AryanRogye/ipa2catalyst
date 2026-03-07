@@ -4,6 +4,7 @@ import AppKit
 
 struct DropZoneView: View {
     @Environment(\.colorScheme) private var colorScheme
+    @StateObject private var themeManager = ThemeManager.shared
     @State private var isTargeted = false
     @State private var droppedFile: URL?
     @State private var analyzedFileInfo: DroppedFileInfo?
@@ -11,10 +12,6 @@ struct DropZoneView: View {
     @State private var isConverting = false
     @State private var errorState: DropZoneErrorState?
     @State private var conversionStatus = ConversionStatus()
-
-    let hackerGreen = Color(red: 0, green: 0.9, blue: 0.1)
-    let hackerDark = Color(red: 0.05, green: 0.05, blue: 0.05)
-    let hackerBorder = Color(red: 0, green: 0.5, blue: 0.1).opacity(0.4)
 
     let dropAnalayzer = DropFileAnalyzer()
     let unzipService = UnzipService()
@@ -27,7 +24,7 @@ struct DropZoneView: View {
             infoPane
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(hackerDark)
+        .background(themeManager.theme == .hacker ? themeManager.hackerDark : Color.clear)
     }
 
     private var dropPane: some View {
@@ -36,12 +33,12 @@ struct DropZoneView: View {
             .padding(24)
             .background(dropPaneBackground)
             .overlay(dropPaneBorder)
-            .contentShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+            .contentShape(RoundedRectangle(cornerRadius: themeManager.theme == .hacker ? 8 : 16, style: .continuous))
             .onDrop(of: [UTType.fileURL.identifier], isTargeted: $isTargeted, perform: handleDrop)
             .animation(.spring(duration: 0.3), value: isTargeted)
             .animation(.default, value: isProcessingDrop)
             .animation(.spring, value: droppedFile)
-            .alert("SYSTEM ERROR", isPresented: alertIsPresented, presenting: errorState) { _ in
+            .alert(themeManager.theme == .hacker ? "SYSTEM ERROR" : "Drop Error", isPresented: alertIsPresented, presenting: errorState) { _ in
                 Button("OK") { errorState = nil }
             } message: { errorState in
                 Text(errorState.message)
@@ -50,50 +47,9 @@ struct DropZoneView: View {
 
     private var infoPane: some View {
         VStack(alignment: .leading, spacing: 14) {
-            HStack {
-                VStack(alignment: .leading, spacing: 4) {
-                    Text("[ SYSTEM_LOG ]")
-                        .font(.system(.headline, design: .monospaced))
-                        .foregroundStyle(hackerGreen)
-
-                    Text(infoSubtitleText)
-                        .font(.system(.caption, design: .monospaced))
-                        .foregroundStyle(hackerGreen.opacity(0.6))
-                }
-
-                Spacer()
-
-                if let analyzedFileInfo {
-                    Button(action: { openDirectory(analyzedFileInfo.app) }) {
-                        Label("REVEAL_BUNDLE", systemImage: "folder")
-                            .font(.system(.caption, design: .monospaced))
-                            .lineLimit(1)
-                            .minimumScaleFactor(0.5)
-                    }
-                    .buttonStyle(.plain)
-                    .padding(.horizontal, 10)
-                    .padding(.vertical, 6)
-                    .background(hackerGreen.opacity(0.1))
-                    .overlay(RoundedRectangle(cornerRadius: 4).stroke(hackerGreen, lineWidth: 1))
-                    .foregroundStyle(hackerGreen)
-                    .disabled(isProcessingDrop)
-                }
-            }
-
-            ScrollView {
-                Group {
-                    if let analyzedFileInfo {
-                        VStack(alignment: .leading, spacing: 14) {
-                            ZippedFileExplorer(fileInfo: analyzedFileInfo)
-                            conversionPanel
-                        }
-                    } else {
-                        infoPlaceholder
-                    }
-                }
-                .frame(maxWidth: .infinity, alignment: .topLeading)
-            }
-            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+            infoPaneHeader
+            
+            infoPaneContent
 
             if let errorState {
                 errorBanner(errorState)
@@ -104,32 +60,100 @@ struct DropZoneView: View {
         .background(infoPaneBackground)
         .overlay(infoPaneBorder)
     }
+    
+    private var infoPaneHeader: some View {
+        HStack {
+            VStack(alignment: .leading, spacing: 4) {
+                Text(themeManager.theme == .hacker ? "[ SYSTEM_LOG ]" : "Info")
+                    .font(themeManager.theme == .hacker ? .system(.headline, design: .monospaced) : .headline)
+                    .foregroundStyle(themeManager.theme == .hacker ? themeManager.hackerGreen : .primary)
+
+                Text(infoSubtitleText)
+                    .font(themeManager.theme == .hacker ? .system(.caption, design: .monospaced) : .caption)
+                    .foregroundStyle(themeManager.theme == .hacker ? themeManager.hackerGreen.opacity(0.6) : .secondary)
+            }
+
+            Spacer()
+
+            if let analyzedFileInfo {
+                revealButton(for: analyzedFileInfo)
+            }
+        }
+    }
+    
+    @ViewBuilder
+    private func revealButton(for info: DroppedFileInfo) -> some View {
+        if themeManager.theme == .hacker {
+            Button(action: { openDirectory(info.app) }) {
+                Label("REVEAL_BUNDLE", systemImage: "folder")
+                    .font(.system(.caption, design: .monospaced))
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.5)
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 6)
+                    .background(themeManager.hackerGreen.opacity(0.1))
+                    .overlay(RoundedRectangle(cornerRadius: 4).stroke(themeManager.hackerGreen, lineWidth: 1))
+                    .foregroundStyle(themeManager.hackerGreen)
+            }
+            .buttonStyle(.plain)
+            .disabled(isProcessingDrop)
+        } else {
+            Button(action: { openDirectory(info.app) }) {
+                Label("Reveal App", systemImage: "folder")
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.5)
+            }
+            .buttonStyle(.bordered)
+            .disabled(isProcessingDrop)
+        }
+    }
+    
+    private var infoPaneContent: some View {
+        ScrollView {
+            Group {
+                if let analyzedFileInfo {
+                    VStack(alignment: .leading, spacing: 14) {
+                        ZippedFileExplorer(fileInfo: analyzedFileInfo)
+                        conversionPanel
+                    }
+                } else {
+                    infoPlaceholder
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .topLeading)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+    }
 
     private var contentStack: some View {
-        VStack(spacing: 20) {
+        VStack(spacing: themeManager.theme == .hacker ? 20 : 16) {
             ZStack {
-                Image(systemName: isProcessingDrop ? "terminal.fill" : "network")
-                    .font(.system(size: 44, weight: .light))
-                    .foregroundStyle(hackerGreen)
+                Image(systemName: isProcessingDrop ? 
+                      (themeManager.theme == .hacker ? "terminal.fill" : "arrow.clockwise.circle.fill") : 
+                      (themeManager.theme == .hacker ? "network" : "square.and.arrow.down.on.square.fill"))
+                    .symbolRenderingMode(themeManager.theme == .hacker ? .monochrome : .hierarchical)
+                    .foregroundStyle(themeManager.theme == .hacker ? themeManager.hackerGreen : (isTargeted ? Color.accentColor : .secondary))
+                    .font(.system(size: themeManager.theme == .hacker ? 44 : 38, weight: .regular))
+                    .symbolEffect(.bounce, value: isTargeted)
                     .symbolEffect(.variableColor.iterative, value: isProcessingDrop)
                 
-                if isTargeted {
+                if themeManager.theme == .hacker && isTargeted {
                     Circle()
-                        .stroke(hackerGreen, lineWidth: 2)
+                        .stroke(themeManager.hackerGreen, lineWidth: 2)
                         .frame(width: 80, height: 80)
                         .scaleEffect(isTargeted ? 1.2 : 1.0)
                         .opacity(isTargeted ? 0.5 : 0)
                 }
             }
 
-            VStack(spacing: 8) {
-                Text(titleText.uppercased())
-                    .font(.system(.headline, design: .monospaced))
-                    .foregroundStyle(hackerGreen)
+            VStack(spacing: themeManager.theme == .hacker ? 8 : 6) {
+                Text(themeManager.theme == .hacker ? titleText.uppercased() : titleText)
+                    .font(themeManager.theme == .hacker ? .system(.headline, design: .monospaced) : .headline)
+                    .foregroundStyle(themeManager.theme == .hacker ? themeManager.hackerGreen : .primary)
 
                 Text(subtitleText)
-                    .font(.system(.subheadline, design: .monospaced))
-                    .foregroundStyle(hackerGreen.opacity(0.7))
+                    .font(themeManager.theme == .hacker ? .system(.subheadline, design: .monospaced) : .subheadline)
+                    .foregroundStyle(themeManager.theme == .hacker ? themeManager.hackerGreen.opacity(0.7) : .secondary)
                     .multilineTextAlignment(.center)
             }
 
@@ -147,57 +171,107 @@ struct DropZoneView: View {
     private func fileInfoTag(file: URL) -> some View {
         HStack(spacing: 8) {
             Image(systemName: "doc.zipper")
+                .foregroundStyle(themeManager.theme == .hacker ? themeManager.hackerGreen : .secondary)
             Text(file.lastPathComponent)
+                .font(themeManager.theme == .hacker ? .system(.callout, design: .monospaced) : .callout)
+                .foregroundStyle(themeManager.theme == .hacker ? themeManager.hackerGreen : .primary)
         }
-        .font(.system(.callout, design: .monospaced))
         .padding(.horizontal, 12)
-        .padding(.vertical, 8)
-        .background(hackerGreen.opacity(0.1))
-        .overlay(RoundedRectangle(cornerRadius: 4).stroke(hackerGreen.opacity(0.3), lineWidth: 1))
-        .foregroundStyle(hackerGreen)
+        .padding(.vertical, themeManager.theme == .hacker ? 8 : 6)
+        .background(fileInfoBackground)
+        .overlay(Group {
+            if themeManager.theme == .hacker {
+                RoundedRectangle(cornerRadius: 4).stroke(themeManager.hackerGreen.opacity(0.3), lineWidth: 1)
+            }
+        })
         .transition(.scale.combined(with: .opacity))
     }
 
-    private var actionRow: some View {
-        VStack(spacing: 12) {
-            HStack(spacing: 10) {
-                hackerButton(
-                    label: isProcessingDrop ? "ANALYZING..." : "ANALYZE_IPA",
-                    icon: "magnifyingglass",
-                    primary: true,
-                    action: analyzeDroppedFile,
-                    disabled: isBusy || droppedFile == nil
-                )
-
-                if analyzedFileInfo != nil {
-                    hackerButton(
-                        label: isConverting ? "CONVERTING..." : "PATCH_BINARY",
-                        icon: "gearshape.2",
-                        primary: true,
-                        action: convertAnalyzedApp,
-                        disabled: isBusy
-                    )
-                }
+    private var fileInfoBackground: some View {
+        Group {
+            if themeManager.theme == .hacker {
+                themeManager.hackerGreen.opacity(0.1)
+            } else {
+                Capsule().fill(.quaternary.opacity(0.5))
             }
-            
-            HStack(spacing: 10) {
-                hackerButton(
-                    label: "CLEAR_BUFFER",
-                    icon: "trash",
-                    primary: false,
-                    action: {
-                        withAnimation {
-                            droppedFile = nil
-                            analyzedFileInfo = nil
-                            errorState = nil
-                            conversionStatus = ConversionStatus()
+        }
+    }
+
+    private var actionRow: some View {
+        Group {
+            if themeManager.theme == .hacker {
+                VStack(spacing: 12) {
+                    HStack(spacing: 10) {
+                        hackerButton(
+                            label: isProcessingDrop ? "ANALYZING..." : "ANALYZE_IPA",
+                            icon: "magnifyingglass",
+                            primary: true,
+                            action: analyzeDroppedFile,
+                            disabled: isBusy || droppedFile == nil
+                        )
+
+                        if analyzedFileInfo != nil {
+                            hackerButton(
+                                label: isConverting ? "CONVERTING..." : "PATCH_BINARY",
+                                icon: "gearshape.2",
+                                primary: true,
+                                action: convertAnalyzedApp,
+                                disabled: isBusy
+                            )
                         }
-                    },
-                    disabled: isBusy
-                )
+                    }
+                    
+                    HStack(spacing: 10) {
+                        hackerButton(
+                            label: "CLEAR_BUFFER",
+                            icon: "trash",
+                            primary: false,
+                            action: clearState,
+                            disabled: isBusy
+                        )
+                    }
+                }
+            } else {
+                HStack(spacing: 10) {
+                    Button(action: analyzeDroppedFile) {
+                        Label(isProcessingDrop ? "Analyzing..." : "Analyze", systemImage: "magnifyingglass")
+                            .frame(minWidth: 110)
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.5)
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .controlSize(.large)
+                    .disabled(isBusy || droppedFile == nil)
+
+                    if analyzedFileInfo != nil {
+                        Button(action: convertAnalyzedApp) {
+                            Label(isConverting ? "Converting..." : "Convert", systemImage: "gearshape.2")
+                                .frame(minWidth: 110)
+                                .lineLimit(1)
+                                .minimumScaleFactor(0.5)
+                        }
+                        .buttonStyle(.borderedProminent)
+                        .controlSize(.large)
+                        .disabled(isBusy)
+                    }
+
+                    Button("Clear") { clearState() }
+                        .buttonStyle(.bordered)
+                        .controlSize(.large)
+                        .disabled(isBusy)
+                }
             }
         }
         .transition(.move(edge: .bottom).combined(with: .opacity))
+    }
+    
+    private func clearState() {
+        withAnimation {
+            droppedFile = nil
+            analyzedFileInfo = nil
+            errorState = nil
+            conversionStatus = ConversionStatus()
+        }
     }
     
     private func hackerButton(label: String, icon: String, primary: Bool, action: @escaping () -> Void, disabled: Bool) -> some View {
@@ -209,9 +283,9 @@ struct DropZoneView: View {
                 .padding(.horizontal, 16)
                 .padding(.vertical, 10)
                 .frame(minWidth: 140)
-                .background(primary ? hackerGreen : Color.clear)
-                .foregroundStyle(primary ? hackerDark : hackerGreen)
-                .overlay(RoundedRectangle(cornerRadius: 4).stroke(hackerGreen, lineWidth: 1))
+                .background(primary ? themeManager.hackerGreen : Color.clear)
+                .foregroundStyle(primary ? themeManager.hackerDark : themeManager.hackerGreen)
+                .overlay(RoundedRectangle(cornerRadius: 4).stroke(themeManager.hackerGreen, lineWidth: 1))
                 .opacity(disabled ? 0.5 : 1.0)
         }
         .buttonStyle(.plain)
@@ -219,164 +293,272 @@ struct DropZoneView: View {
     }
 
     private var dropPaneBackground: some View {
+        Group {
+            if themeManager.theme == .hacker {
+                hackerDropPaneBackground
+            } else {
+                regularDropPaneBackground
+            }
+        }
+    }
+    
+    private var hackerDropPaneBackground: some View {
         ZStack {
             RoundedRectangle(cornerRadius: 8, style: .continuous)
-                .fill(hackerDark)
-                .shadow(color: hackerGreen.opacity(0.1), radius: 10, y: 0)
+                .fill(themeManager.hackerDark)
+                .shadow(color: themeManager.hackerGreen.opacity(0.1), radius: 10, y: 0)
 
             if isTargeted {
-                hackerGreen.opacity(0.05)
+                themeManager.hackerGreen.opacity(0.05)
             }
             
-            // Grid effect
             Canvas { context, size in
                 let step: CGFloat = 20
                 for x in stride(from: 0, through: size.width, by: step) {
-                    context.stroke(Path(CGRect(x: x, y: 0, width: 0.5, height: size.height)), with: .color(hackerGreen.opacity(0.03)))
+                    context.stroke(Path(CGRect(x: x, y: 0, width: 0.5, height: size.height)), with: .color(themeManager.hackerGreen.opacity(0.03)))
                 }
                 for y in stride(from: 0, through: size.height, by: step) {
-                    context.stroke(Path(CGRect(x: 0, y: y, width: size.width, height: 0.5)), with: .color(hackerGreen.opacity(0.03)))
+                    context.stroke(Path(CGRect(x: 0, y: y, width: size.width, height: 0.5)), with: .color(themeManager.hackerGreen.opacity(0.03)))
                 }
+            }
+        }
+    }
+    
+    private var regularDropPaneBackground: some View {
+        ZStack {
+            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                .fill(.ultraThinMaterial)
+                .shadow(color: .black.opacity(colorScheme == .dark ? 0.3 : 0.1), radius: 10, y: 4)
+
+            if isTargeted {
+                RoundedRectangle(cornerRadius: 16, style: .continuous)
+                    .fill(Color.accentColor.opacity(0.05))
             }
         }
     }
 
     private var dropPaneBorder: some View {
-        RoundedRectangle(cornerRadius: 8, style: .continuous)
-            .strokeBorder(
-                isTargeted ? hackerGreen : hackerBorder,
-                lineWidth: isTargeted ? 2 : 1
-            )
+        Group {
+            if themeManager.theme == .hacker {
+                RoundedRectangle(cornerRadius: 8, style: .continuous)
+                    .strokeBorder(
+                        isTargeted ? themeManager.hackerGreen : themeManager.hackerBorder,
+                        lineWidth: isTargeted ? 2 : 1
+                    )
+            } else {
+                RoundedRectangle(cornerRadius: 16, style: .continuous)
+                    .strokeBorder(
+                        isTargeted ? Color.accentColor : Color.primary.opacity(0.1),
+                        style: StrokeStyle(lineWidth: isTargeted ? 2 : 1, dash: isTargeted ? [] : [6, 4])
+                    )
+            }
+        }
     }
 
     private var infoPaneBackground: some View {
-        RoundedRectangle(cornerRadius: 8, style: .continuous)
-            .fill(hackerDark.opacity(0.8))
+        Group {
+            if themeManager.theme == .hacker {
+                RoundedRectangle(cornerRadius: 8, style: .continuous)
+                    .fill(themeManager.hackerDark.opacity(0.8))
+            } else {
+                RoundedRectangle(cornerRadius: 16, style: .continuous)
+                    .fill(.ultraThinMaterial)
+                    .shadow(color: .black.opacity(colorScheme == .dark ? 0.22 : 0.07), radius: 10, y: 4)
+            }
+        }
     }
 
     private var infoPaneBorder: some View {
-        RoundedRectangle(cornerRadius: 8, style: .continuous)
-            .strokeBorder(hackerBorder, lineWidth: 1)
+        Group {
+            if themeManager.theme == .hacker {
+                RoundedRectangle(cornerRadius: 8, style: .continuous)
+                    .strokeBorder(themeManager.hackerBorder, lineWidth: 1)
+            } else {
+                RoundedRectangle(cornerRadius: 16, style: .continuous)
+                    .strokeBorder(Color.primary.opacity(0.08), lineWidth: 1)
+            }
+        }
     }
 
     private var infoPlaceholder: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Label("AWAITING_DATA_STREAM", systemImage: "bolt.horizontal.fill")
-                .font(.system(.callout, design: .monospaced).weight(.semibold))
-                .foregroundStyle(hackerGreen)
+            Label(themeManager.theme == .hacker ? "AWAITING_DATA_STREAM" : "Waiting for analysis", 
+                  systemImage: themeManager.theme == .hacker ? "bolt.horizontal.fill" : "sparkle.magnifyingglass")
+                .font(themeManager.theme == .hacker ? .system(.callout, design: .monospaced).weight(.semibold) : .callout.weight(.semibold))
+                .foregroundStyle(themeManager.theme == .hacker ? themeManager.hackerGreen : .secondary)
 
-            Text("Feed .ipa or .zip archive to the input buffer. Initiate analysis to resolve Mach-O architecture and entitlement trees.")
-                .font(.system(.callout, design: .monospaced))
-                .foregroundStyle(hackerGreen.opacity(0.6))
+            Text(themeManager.theme == .hacker ? 
+                 "Feed .ipa or .zip archive to the input buffer. Initiate analysis to resolve Mach-O architecture and entitlement trees." :
+                 "Drop an `.ipa` or `.zip` on the left, then choose Analyze. The app bundle, Mach-O, Info.plist, and _CodeSignature will appear here.")
+                .font(themeManager.theme == .hacker ? .system(.callout, design: .monospaced) : .callout)
+                .foregroundStyle(themeManager.theme == .hacker ? themeManager.hackerGreen.opacity(0.6) : .secondary)
                 .fixedSize(horizontal: false, vertical: true)
 
             if let droppedFile {
                 Divider()
-                    .background(hackerGreen.opacity(0.2))
-                detailTag(label: "SOURCE_URI", value: droppedFile.lastPathComponent)
+                    .background(themeManager.theme == .hacker ? themeManager.hackerGreen.opacity(0.2) : Color.gray.opacity(0.2))
+                detailTag(label: themeManager.theme == .hacker ? "SOURCE_URI" : "Loaded Archive", value: droppedFile.lastPathComponent)
             }
         }
         .frame(maxWidth: .infinity, alignment: .topLeading)
         .padding(14)
-        .background(hackerGreen.opacity(0.03))
-        .overlay(RoundedRectangle(cornerRadius: 4).stroke(hackerGreen.opacity(0.1), lineWidth: 1))
+        .background(infoPlaceholderBackground)
+        .overlay(Group {
+            if themeManager.theme == .hacker {
+                RoundedRectangle(cornerRadius: 4).stroke(themeManager.hackerGreen.opacity(0.1), lineWidth: 1)
+            }
+        })
+    }
+
+    private var infoPlaceholderBackground: some View {
+        Group {
+            if themeManager.theme == .hacker {
+                themeManager.hackerGreen.opacity(0.03)
+            } else {
+                RoundedRectangle(cornerRadius: 12, style: .continuous).fill(.background.opacity(0.45))
+            }
+        }
     }
 
     private var conversionPanel: some View {
         VStack(alignment: .leading, spacing: 12) {
-            HStack {
-                VStack(alignment: .leading, spacing: 4) {
-                    Text("CONVERSION_SEQUENCE")
-                        .font(.system(.headline, design: .monospaced))
-                        .foregroundStyle(hackerGreen)
-                    Text(conversionSubtitleText)
-                        .font(.system(.caption, design: .monospaced))
-                        .foregroundStyle(hackerGreen.opacity(0.5))
-                }
+            conversionPanelHeader
 
-                Spacer()
-
-                if conversionStatus.signedApp {
-                    Text("SUCCESS")
-                        .font(.system(.caption, design: .monospaced).weight(.bold))
-                        .foregroundStyle(hackerGreen)
-                } else if isConverting {
-                    ProgressView()
-                        .tint(hackerGreen)
-                        .controlSize(.small)
-                }
-            }
-
-            VStack(spacing: 10) {
-                statusRow(title: "ENTITLEMENT_GENERATION", state: conversionStatus.createdEntitlements)
-                statusRow(title: "PLIST_PATCHING", state: conversionStatus.modifiedPlist)
-                statusRow(title: "BINARY_STAMPING", state: conversionStatus.patchedBinary)
-                statusRow(title: "CODE_SIG_FLUSH", state: conversionStatus.removedCodeSig)
-                countRow(title: "MACHO_COLLECTION", count: conversionStatus.collectingMachOsCount, done: conversionStatus.doneCollectingMachos)
-                progressRow(title: "ARCH_PATCHING", current: conversionStatus.stampingCurrent, total: conversionStatus.stampingTotal, done: conversionStatus.doneStamping)
-                countRow(title: "DYLIB_EXTRACTION", count: conversionStatus.libCollectingCount, done: conversionStatus.libCollectionDone)
-                progressRow(title: "DYLIB_SIGNING", current: conversionStatus.libSigningCurrent, total: conversionStatus.libSigningTotal, done: conversionStatus.libSigningDone)
-                countRow(title: "BUNDLE_COLLECTION", count: conversionStatus.bundleCollectingCount, done: conversionStatus.bundleCollectionDone)
-                progressRow(title: "BUNDLE_SIGNING", current: conversionStatus.bundleSigningCurrent, total: conversionStatus.bundleSigningTotal, done: conversionStatus.bundleSigningDone)
-                statusRow(title: "FINAL_BUNDLE_SIGN", state: conversionStatus.signedApp)
+            VStack(spacing: themeManager.theme == .hacker ? 10 : 8) {
+                statusRow(title: themeManager.theme == .hacker ? "ENTITLEMENT_GENERATION" : "Entitlements", state: conversionStatus.createdEntitlements)
+                statusRow(title: themeManager.theme == .hacker ? "PLIST_PATCHING" : "Plist Modified", state: conversionStatus.modifiedPlist)
+                statusRow(title: themeManager.theme == .hacker ? "BINARY_STAMPING" : "Binary Patched", state: conversionStatus.patchedBinary)
+                statusRow(title: themeManager.theme == .hacker ? "CODE_SIG_FLUSH" : "Code Signature Removed", state: conversionStatus.removedCodeSig)
+                countRow(title: themeManager.theme == .hacker ? "MACHO_COLLECTION" : "Mach-Os Collected", count: conversionStatus.collectingMachOsCount, done: conversionStatus.doneCollectingMachos)
+                progressRow(title: themeManager.theme == .hacker ? "ARCH_PATCHING" : "Mach-Os Stamped", current: conversionStatus.stampingCurrent, total: conversionStatus.stampingTotal, done: conversionStatus.doneStamping)
+                countRow(title: themeManager.theme == .hacker ? "DYLIB_EXTRACTION" : "Libraries Collected", count: conversionStatus.libCollectingCount, done: conversionStatus.libCollectionDone)
+                progressRow(title: themeManager.theme == .hacker ? "DYLIB_SIGNING" : "Libraries Signed", current: conversionStatus.libSigningCurrent, total: conversionStatus.libSigningTotal, done: conversionStatus.libSigningDone)
+                countRow(title: themeManager.theme == .hacker ? "BUNDLE_COLLECTION" : "Bundles Collected", count: conversionStatus.bundleCollectingCount, done: conversionStatus.bundleCollectionDone)
+                progressRow(title: themeManager.theme == .hacker ? "BUNDLE_SIGNING" : "Bundles Signed", current: conversionStatus.bundleSigningCurrent, total: conversionStatus.bundleSigningTotal, done: conversionStatus.bundleSigningDone)
+                statusRow(title: themeManager.theme == .hacker ? "FINAL_BUNDLE_SIGN" : "App Signed", state: conversionStatus.signedApp)
             }
         }
         .padding(14)
-        .background(hackerGreen.opacity(0.03))
-        .overlay(RoundedRectangle(cornerRadius: 4).stroke(hackerGreen.opacity(0.1), lineWidth: 1))
+        .background(conversionPanelBackground)
+        .overlay(Group {
+            if themeManager.theme == .hacker {
+                RoundedRectangle(cornerRadius: 4).stroke(themeManager.hackerGreen.opacity(0.1), lineWidth: 1)
+            }
+        })
         .transition(.opacity.combined(with: .move(edge: .bottom)))
+    }
+    
+    private var conversionPanelHeader: some View {
+        HStack {
+            VStack(alignment: .leading, spacing: 4) {
+                Text(themeManager.theme == .hacker ? "CONVERSION_SEQUENCE" : "Conversion")
+                    .font(themeManager.theme == .hacker ? .system(.headline, design: .monospaced) : .headline)
+                    .foregroundStyle(themeManager.theme == .hacker ? themeManager.hackerGreen : .primary)
+                Text(conversionSubtitleText)
+                    .font(themeManager.theme == .hacker ? .system(.caption, design: .monospaced) : .caption)
+                    .foregroundStyle(themeManager.theme == .hacker ? themeManager.hackerGreen.opacity(0.5) : .secondary)
+            }
+
+            Spacer()
+
+            if conversionStatus.signedApp {
+                conversionSuccessIndicator
+            } else if isConverting {
+                ProgressView()
+                    .tint(themeManager.theme == .hacker ? themeManager.hackerGreen : .accentColor)
+                    .controlSize(.small)
+            }
+        }
+    }
+    
+    @ViewBuilder
+    private var conversionSuccessIndicator: some View {
+        if themeManager.theme == .hacker {
+            Text("SUCCESS")
+                .font(.system(.caption, design: .monospaced).weight(.bold))
+                .foregroundStyle(themeManager.hackerGreen)
+        } else {
+            Label("Done", systemImage: "checkmark.circle.fill")
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(.green)
+        }
+    }
+
+    private var conversionPanelBackground: some View {
+        Group {
+            if themeManager.theme == .hacker {
+                themeManager.hackerGreen.opacity(0.03)
+            } else {
+                RoundedRectangle(cornerRadius: 12, style: .continuous).fill(.background.opacity(0.45))
+            }
+        }
     }
 
     private func statusRow(title: String, state: Bool) -> some View {
         HStack {
             Text(title)
-                .font(.system(.caption, design: .monospaced).weight(.semibold))
-                .foregroundStyle(hackerGreen.opacity(0.7))
+                .font(themeManager.theme == .hacker ? .system(.caption, design: .monospaced).weight(.semibold) : .caption.weight(.semibold))
+                .foregroundStyle(themeManager.theme == .hacker ? themeManager.hackerGreen.opacity(0.7) : .secondary)
             Spacer()
-            Text(state ? "[ DONE ]" : "[ .... ]")
-                .font(.system(.caption, design: .monospaced))
-                .foregroundStyle(state ? hackerGreen : hackerGreen.opacity(0.3))
+            if themeManager.theme == .hacker {
+                Text(state ? "[ DONE ]" : "[ .... ]")
+                    .font(.system(.caption, design: .monospaced))
+                    .foregroundStyle(state ? themeManager.hackerGreen : themeManager.hackerGreen.opacity(0.3))
+            } else {
+                Image(systemName: state ? "checkmark.circle.fill" : "circle")
+                    .foregroundStyle(state ? .green : .secondary.opacity(0.5))
+            }
         }
     }
 
     private func countRow(title: String, count: Int, done: Bool) -> some View {
         HStack {
             Text(title)
-                .font(.system(.caption, design: .monospaced).weight(.semibold))
-                .foregroundStyle(hackerGreen.opacity(0.7))
+                .font(themeManager.theme == .hacker ? .system(.caption, design: .monospaced).weight(.semibold) : .caption.weight(.semibold))
+                .foregroundStyle(themeManager.theme == .hacker ? themeManager.hackerGreen.opacity(0.7) : .secondary)
             Spacer()
-            Text(String(format: "%03d", count))
-                .font(.system(.caption, design: .monospaced))
-                .foregroundStyle(hackerGreen)
-            Text(done ? "[ OK ]" : "[ .. ]")
-                .font(.system(.caption, design: .monospaced))
-                .foregroundStyle(done ? hackerGreen : hackerGreen.opacity(0.3))
+            Text(themeManager.theme == .hacker ? String(format: "%03d", count) : "\(count)")
+                .font(themeManager.theme == .hacker ? .system(.caption, design: .monospaced) : .caption.monospacedDigit())
+                .foregroundStyle(themeManager.theme == .hacker ? themeManager.hackerGreen : .primary)
+            if themeManager.theme == .hacker {
+                Text(done ? "[ OK ]" : "[ .. ]")
+                    .font(.system(.caption, design: .monospaced))
+                    .foregroundStyle(done ? themeManager.hackerGreen : themeManager.hackerGreen.opacity(0.3))
+            } else {
+                Image(systemName: done ? "checkmark.circle.fill" : "circle")
+                    .foregroundStyle(done ? .green : .secondary.opacity(0.5))
+            }
         }
     }
 
     private func progressRow(title: String, current: Int, total: Int, done: Bool) -> some View {
         HStack {
             Text(title)
-                .font(.system(.caption, design: .monospaced).weight(.semibold))
-                .foregroundStyle(hackerGreen.opacity(0.7))
+                .font(themeManager.theme == .hacker ? .system(.caption, design: .monospaced).weight(.semibold) : .caption.weight(.semibold))
+                .foregroundStyle(themeManager.theme == .hacker ? themeManager.hackerGreen.opacity(0.7) : .secondary)
             Spacer()
             Text(total > 0 ? "\(current)/\(total)" : "\(current)")
-                .font(.system(.caption, design: .monospaced))
-                .foregroundStyle(hackerGreen)
-            Text(done ? "[ OK ]" : "[ .. ]")
-                .font(.system(.caption, design: .monospaced))
-                .foregroundStyle(done ? hackerGreen : hackerGreen.opacity(0.3))
+                .font(themeManager.theme == .hacker ? .system(.caption, design: .monospaced) : .caption.monospacedDigit())
+                .foregroundStyle(themeManager.theme == .hacker ? themeManager.hackerGreen : .primary)
+            if themeManager.theme == .hacker {
+                Text(done ? "[ OK ]" : "[ .. ]")
+                    .font(.system(.caption, design: .monospaced))
+                    .foregroundStyle(done ? themeManager.hackerGreen : themeManager.hackerGreen.opacity(0.3))
+            } else {
+                Image(systemName: done ? "checkmark.circle.fill" : "circle")
+                    .foregroundStyle(done ? .green : .secondary.opacity(0.5))
+            }
         }
     }
 
     private func detailTag(label: String, value: String) -> some View {
         VStack(alignment: .leading, spacing: 4) {
             Text(label)
-                .font(.system(.caption, design: .monospaced).weight(.semibold))
-                .foregroundStyle(hackerGreen.opacity(0.6))
+                .font(themeManager.theme == .hacker ? .system(.caption, design: .monospaced).weight(.semibold) : .caption.weight(.semibold))
+                .foregroundStyle(themeManager.theme == .hacker ? themeManager.hackerGreen.opacity(0.6) : .secondary)
             Text(value)
-                .font(.system(.callout, design: .monospaced))
-                .foregroundStyle(hackerGreen)
+                .font(themeManager.theme == .hacker ? .system(.callout, design: .monospaced) : .callout.monospaced())
+                .foregroundStyle(themeManager.theme == .hacker ? themeManager.hackerGreen : .primary)
                 .textSelection(.enabled)
                 .lineLimit(2)
         }
@@ -384,18 +566,18 @@ struct DropZoneView: View {
 
     private var subtitleText: String {
         if isProcessingDrop {
-            return "Executing pre-flight checks on archive..."
+            return themeManager.theme == .hacker ? "Executing pre-flight checks on archive..." : "Please wait while the archive is being prepared"
         }
         if isConverting {
-            return "Applying patches to executable segments..."
+            return themeManager.theme == .hacker ? "Applying patches to executable segments..." : "Converting the app. Review live progress on the right."
         }
         if analyzedFileInfo != nil {
-            return "Archive parsed successfully. Ready for injection."
+            return themeManager.theme == .hacker ? "Archive parsed successfully. Ready for injection." : "Analysis complete. Review the info panel."
         }
         if droppedFile != nil {
-            return "Payload loaded into primary buffer."
+            return themeManager.theme == .hacker ? "Payload loaded into primary buffer." : "File loaded. Review it, then choose Analyze"
         }
-        return "Waiting for .ipa or .zip payload..."
+        return themeManager.theme == .hacker ? "Waiting for .ipa or .zip payload..." : "Drag and drop a .ipa or .zip file here"
     }
 
     private var titleText: String {
@@ -406,35 +588,35 @@ struct DropZoneView: View {
             return "Injecting..."
         }
         if analyzedFileInfo != nil {
-            return "Status: Ready"
+            return themeManager.theme == .hacker ? "Status: Ready" : "Analysis ready"
         }
         if droppedFile != nil {
-            return "Buffer: Loaded"
+            return themeManager.theme == .hacker ? "Buffer: Loaded" : "File loaded"
         }
-        return "System Idle"
+        return themeManager.theme == .hacker ? "System Idle" : "Drop file to analyze"
     }
 
     private var infoSubtitleText: String {
         if isProcessingDrop {
-            return "Resolving bundle identifiers and binary headers"
+            return themeManager.theme == .hacker ? "Resolving bundle identifiers and binary headers" : "Resolving the app bundle and required files"
         }
         if isConverting {
-            return "Live kernel conversion output"
+            return themeManager.theme == .hacker ? "Live kernel conversion output" : "Live conversion progress"
         }
         if analyzedFileInfo != nil {
-            return "Bundle metadata extracted successfully"
+            return themeManager.theme == .hacker ? "Bundle metadata extracted successfully" : "Primary bundle paths resolved"
         }
-        return "System logs awaiting input"
+        return themeManager.theme == .hacker ? "System logs awaiting input" : "Analysis details will appear here"
     }
 
     private var conversionSubtitleText: String {
         if isConverting {
-            return "Running ipa2catalyst.core.pipeline"
+            return themeManager.theme == .hacker ? "Running ipa2catalyst.core.pipeline" : "Processing callbacks from ipa2catalystConversion.convert"
         }
         if conversionStatus.signedApp {
-            return "Sequence terminated: Clean exit"
+            return themeManager.theme == .hacker ? "Sequence terminated: Clean exit" : "Conversion callbacks completed"
         }
-        return "Execute sequence to begin patching"
+        return themeManager.theme == .hacker ? "Execute sequence to begin patching" : "Press Convert to run the conversion pipeline"
     }
 
     private var isBusy: Bool {
@@ -454,16 +636,30 @@ struct DropZoneView: View {
 
     private func errorBanner(_ errorState: DropZoneErrorState) -> some View {
         HStack(spacing: 6) {
-            Image(systemName: "exclamationmark.terminal.fill")
-            Text(errorState.message.uppercased())
+            Image(systemName: themeManager.theme == .hacker ? "exclamationmark.terminal.fill" : "exclamationmark.triangle.fill")
+            Text(themeManager.theme == .hacker ? errorState.message.uppercased() : errorState.message)
         }
-        .font(.system(.caption, design: .monospaced))
+        .font(themeManager.theme == .hacker ? .system(.caption, design: .monospaced) : .caption)
         .foregroundStyle(.red)
         .padding(.horizontal, 12)
-        .padding(.vertical, 8)
-        .background(Color.red.opacity(0.1))
-        .overlay(RoundedRectangle(cornerRadius: 4).stroke(Color.red.opacity(0.5), lineWidth: 1))
+        .padding(.vertical, themeManager.theme == .hacker ? 8 : 6)
+        .background(errorBannerBackground)
+        .overlay(Group {
+            if themeManager.theme == .hacker {
+                RoundedRectangle(cornerRadius: 4).stroke(Color.red.opacity(0.5), lineWidth: 1)
+            }
+        })
         .transition(.move(edge: .bottom).combined(with: .opacity))
+    }
+
+    private var errorBannerBackground: some View {
+        Group {
+            if themeManager.theme == .hacker {
+                Color.red.opacity(0.1)
+            } else {
+                Capsule().fill(.red.opacity(0.1))
+            }
+        }
     }
 
     private func handleDrop(providers: [NSItemProvider]) -> Bool {
@@ -685,10 +881,4 @@ private struct DropZoneErrorState: Identifiable {
 
         message = error.localizedDescription
     }
-}
-
-#Preview {
-    DropZoneView()
-        .frame(width: 480, height: 300)
-        .padding()
 }

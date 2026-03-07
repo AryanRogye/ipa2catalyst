@@ -2,44 +2,47 @@ import SwiftUI
 
 struct ZippedFileExplorer: View {
     let fileInfo: DroppedFileInfo
-    
-    let hackerGreen = Color(red: 0, green: 0.9, blue: 0.1)
+    @StateObject private var themeManager = ThemeManager.shared
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
+        VStack(alignment: .leading, spacing: themeManager.theme == .hacker ? 12 : 10) {
             VStack(alignment: .leading, spacing: 4) {
-                Text("ANALYSIS_RESULTS")
-                    .font(.system(.headline, design: .monospaced))
-                    .foregroundStyle(hackerGreen)
+                Text(themeManager.theme == .hacker ? "ANALYSIS_RESULTS" : "Analysis Results")
+                    .font(themeManager.theme == .hacker ? .system(.headline, design: .monospaced) : .headline)
+                    .foregroundStyle(themeManager.theme == .hacker ? themeManager.hackerGreen : .primary)
 
-                Text("ALL_REQUIRED_OBJECTS_RESOLVED")
-                    .font(.system(.caption, design: .monospaced))
-                    .foregroundStyle(hackerGreen.opacity(0.6))
+                Text(themeManager.theme == .hacker ? "ALL_REQUIRED_OBJECTS_RESOLVED" : "All required paths are available now.")
+                    .font(themeManager.theme == .hacker ? .system(.caption, design: .monospaced) : .caption)
+                    .foregroundStyle(themeManager.theme == .hacker ? themeManager.hackerGreen.opacity(0.6) : .secondary)
             }
 
             VStack(spacing: 8) {
                 resultRow(
-                    title: "BUNDLE_PATH",
+                    title: themeManager.theme == .hacker ? "BUNDLE_PATH" : "App Bundle",
                     icon: "app.dashed",
-                    url: fileInfo.app
+                    url: fileInfo.app,
+                    tint: .accentColor
                 )
 
                 resultRow(
-                    title: "BINARY_ENTRY",
+                    title: themeManager.theme == .hacker ? "BINARY_ENTRY" : "Mach-O",
                     icon: "terminal.fill",
-                    url: fileInfo.machO
+                    url: fileInfo.machO,
+                    tint: .blue
                 )
 
                 resultRow(
-                    title: "MANIFEST_XML",
+                    title: themeManager.theme == .hacker ? "MANIFEST_XML" : "Info.plist",
                     icon: "list.bullet.rectangle.fill",
-                    url: fileInfo.infoPlist
+                    url: fileInfo.infoPlist,
+                    tint: .orange
                 )
 
                 resultRow(
-                    title: "TRUST_CHAIN",
+                    title: themeManager.theme == .hacker ? "TRUST_CHAIN" : "_CodeSignature",
                     icon: "checkmark.shield.fill",
-                    url: fileInfo.codesig
+                    url: fileInfo.codesig,
+                    tint: .green
                 )
             }
         }
@@ -49,21 +52,22 @@ struct ZippedFileExplorer: View {
     private func resultRow(
         title: String,
         icon: String,
-        url: URL
+        url: URL,
+        tint: Color
     ) -> some View {
         HStack(alignment: .top, spacing: 10) {
             Image(systemName: icon)
-                .foregroundStyle(hackerGreen)
+                .foregroundStyle(themeManager.theme == .hacker ? themeManager.hackerGreen : tint)
                 .frame(width: 18)
 
             VStack(alignment: .leading, spacing: 3) {
                 Text(title)
-                    .font(.system(.caption, design: .monospaced).weight(.semibold))
-                    .foregroundStyle(hackerGreen.opacity(0.6))
+                    .font(themeManager.theme == .hacker ? .system(.caption, design: .monospaced).weight(.semibold) : .caption.weight(.semibold))
+                    .foregroundStyle(themeManager.theme == .hacker ? themeManager.hackerGreen.opacity(0.6) : .secondary)
 
                 Text(relativePath(for: url))
-                    .font(.system(.callout, design: .monospaced))
-                    .foregroundStyle(hackerGreen)
+                    .font(themeManager.theme == .hacker ? .system(.callout, design: .monospaced) : .callout.monospaced())
+                    .foregroundStyle(themeManager.theme == .hacker ? themeManager.hackerGreen : .primary)
                     .textSelection(.enabled)
                     .lineLimit(2)
                     .multilineTextAlignment(.leading)
@@ -73,8 +77,19 @@ struct ZippedFileExplorer: View {
         }
         .padding(.horizontal, 10)
         .padding(.vertical, 8)
-        .background(hackerGreen.opacity(0.05))
-        .overlay(RoundedRectangle(cornerRadius: 4).stroke(hackerGreen.opacity(0.2), lineWidth: 1))
+        .background(themeBackground)
+        .overlay(themeManager.theme == .hacker ? RoundedRectangle(cornerRadius: 4).stroke(themeManager.hackerGreen.opacity(0.2), lineWidth: 1) : nil)
+    }
+
+    private var themeBackground: some View {
+        Group {
+            if themeManager.theme == .hacker {
+                themeManager.hackerGreen.opacity(0.05)
+            } else {
+                RoundedRectangle(cornerRadius: 10, style: .continuous)
+                    .fill(.background.opacity(0.55))
+            }
+        }
     }
 
     private func relativePath(for url: URL) -> String {
@@ -87,19 +102,4 @@ struct ZippedFileExplorer: View {
         let relative = String(fullPath.dropFirst(rootPath.count)).trimmingCharacters(in: CharacterSet(charactersIn: "/"))
         return relative.isEmpty ? url.lastPathComponent : relative
     }
-}
-
-#Preview {
-    let base = URL(fileURLWithPath: "/tmp/example/Payload/MyApp.app")
-    let info = DroppedFileInfo(
-        codesig: base.appendingPathComponent("_CodeSignature"),
-        app: base,
-        machO: base.appendingPathComponent("MyApp"),
-        infoPlist: base.appendingPathComponent("Info.plist")
-    )
-
-    ZippedFileExplorer(fileInfo: info)
-        .frame(width: 500)
-        .padding()
-        .background(Color.black)
 }
