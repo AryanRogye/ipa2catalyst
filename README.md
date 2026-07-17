@@ -1,5 +1,7 @@
 # IPA/App macOS launch toolkit
 
+<img width="3840" height="2160" alt="6096984C-3318-4B67-B096-965BE067BBF7" src="https://github.com/user-attachments/assets/3d7b3e73-5a36-4a43-bfcc-3982dd573ec3" />
+
 Utilities for checking plist metadata, extracting entitlements, patching Mach-O platform data, and re-signing app bundles for local testing on macOS.
 
 Use this only with apps you are authorized to test.
