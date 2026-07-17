@@ -121,3 +121,7 @@ spctl -a -vv Some.app
 ## Public release note
 
 If you make this repo public, document ownership/authorization expectations clearly and avoid shipping private app assets or credentials.
+
+## License
+
+This project is available under the [MIT License](LICENSE).

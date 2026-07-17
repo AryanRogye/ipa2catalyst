@@ -23,8 +23,7 @@ fi
 rm -rf "$ZIP"
 rm -rf "$APP"
 
-# unzip /path/to/notebooklm.zip -d "$ZIP"
-unzip /path/to/notebooklm.zip -d "$ZIP"
+unzip "$HOME/Downloads/notebooklm.zip" -d "$ZIP"
 
 mv "$ZIP/Payload/$APP" ./
 

@@ -1,0 +1,25 @@
+# macOS
+.DS_Store
+
+# Python
+__pycache__/
+*.py[cod]
+
+# Xcode user and build data
+xcuserdata/
+DerivedData/
+.build/
+
+# Local logs and generated analysis output
+*.log
+Analyses/
+
+# App archives, bundles, and signing material
+*.ipa
+*.app
+*.mobileprovision
+*.p12
+*.cer
+*.pem
+*.key
+
